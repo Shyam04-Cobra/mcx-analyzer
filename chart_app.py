@@ -96,8 +96,11 @@ c3.metric("📈 PCR Ratio", str(pcr))
 
 st.markdown("---")
 
-symbol_map = {"GOLDM": "MCX:GOLDM1!", "SILVERM": "MCX:SILVERM1!"}
-tv_symbol = symbol_map.get(commodity, "MCX:GOLDM1!")
+# यहाँ कमोडिटी के अनुसार सही ट्रेडिंगव्यू सिंबल सेट किया गया है
+if commodity == "GOLDM":
+    tv_symbol = "MCX:GOLDM1!"
+else:
+    tv_symbol = "MCX:SILVERM1!"
 
 chart_html = f"""
 <div class="tradingview-widget-container">
