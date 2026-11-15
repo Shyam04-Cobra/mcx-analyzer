@@ -41,7 +41,7 @@ if active_options is None or active_options.empty:
     st.warning("⚠️ डेटा लोड हो रहा है...")
     st.stop()
 
-st.caption(f"Expiry: {nearest_expiry.strftime('%d %b %Y')} | Live")
+st.caption("Live Market Analyzer")
 
 if 'smart_obj' not in st.session_state:
     try:
@@ -96,6 +96,12 @@ else:
                 bias = "BULLISH" if pcr > 1.15 else ("BEARISH" if pcr < 0.85 else "SIDEWAYS")
                 
                 st.markdown("### 📊 Dashboard")
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Support", str(m_pe))
-                c2.met
+                st.write(f"Support: {m_pe} | Resistance: {m_ce} | PCR: {pcr} | Bias: {bias}")
+                
+                st.dataframe(chain, usest.dataframe(chain, use_container_width=True)
+            else:
+                st.info("ℹ️ डेटा उपलब्ध नहीं है।")
+        else:
+            st.info("ℹ️ मार्केट डेटा का इंतज़ार है...")
+    except:
+        st.info("ℹ️ कनेक्ट हो रहा है...")
