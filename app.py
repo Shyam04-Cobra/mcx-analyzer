@@ -67,4 +67,25 @@ if st.button("Update Data & Analyze"):
                     ce_df = res_df[res_df['Type'] == 'CE'].groupby('Strike').agg({'OI': 'CE_OI', 'LTP': 'CE_LTP'})
                     pe_df = res_df[res_df['Type'] == 'PE'].groupby('Strike').agg({'OI': 'PE_OI', 'LTP': 'PE_LTP'})
                     
-                    chain = pd.concat([ce_df, pe_
+                    chain = pd.concat([ce_df, pe_df], axis=1).fillna(0).sort_index()
+                    
+                    total_ce = chain['CE_OI'].sum() if 'CE_OI' in chain.columns else 1
+                    total_pe = chain['PE_OI'].sum() if 'PE_OI' in chain.columns else 0
+                    pcr = round(total_pe / max(total_ce, 1), 2)
+                    
+                    if not chain.empty and 'CE_OI' in chain.columns and 'PE_OI' in chain.columns:
+                        max_ce_strike = int(chain['CE_OI'].idxmax())
+                        max_pe_strike = int(chain['PE_OI'].idxmax())
+                    else:
+                        max_ce_strike = 0
+                        max_pe_strike = 0
+                    
+                    if pcr > 1.15:
+                        market_view = "BULLISH"
+                    elif pcr < 0.85:
+                        market_view = "BEARISH"
+                    else:
+                        market_view = "SIDEWAYS"
+                    
+                    st.markdown("### Market Dashboard")
+                    c1, c2, c3, c4 = st.columns(4)
