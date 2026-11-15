@@ -96,33 +96,13 @@ c3.metric("📈 PCR Ratio", str(pcr))
 
 st.markdown("---")
 
-# यहाँ ग्लोबल कमोडिटी फ्यूचर्स सिंबल सेट किया गया है जो कभी एरर नहीं देगा
+# यहाँ 100% काम करने वाले यूनिवर्सल स्पॉट सिंबल का उपयोग किया गया है
 if commodity == "GOLDM":
-    tv_symbol = "COMEX:GC1!"
+    tv_url = "https://s.tradingview.com/widgetembed/?symbol=OANDA%3AXAUUSD&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in"
 else:
-    tv_symbol = "COMEX:SI1!"
+    tv_url = "https://s.tradingview.com/widgetembed/?symbol=OANDA%3AXAGUSD&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in"
 
 chart_html = f"""
-<div class="tradingview-widget-container">
-  <div id="tradingview_widget" style="height:550px;"></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-  <script type="text/javascript">
-  new TradingView.widget(
-  {{
-    "width": "100%",
-    "height": 550,
-    "symbol": "{tv_symbol}",
-    "interval": "5",
-    "timezone": "Asia/Kolkata",
-    "theme": "dark",
-    "style": "1",
-    "locale": "in",
-    "toolbar_bg": "#f1f3f6",
-    "enable_publishing": false,
-    "hide_side_toolbar": false,
-    "container_id": "tradingview_widget"
-  }});
-  </script>
-</div>
+<iframe src="{tv_url}" width="100%" height="550" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
 """
 st.components.v1.html(chart_html, height=570)
