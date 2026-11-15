@@ -23,7 +23,7 @@ except:
 
 commodity = st.radio("Select Commodity:", ["GOLDM", "SILVERM"], horizontal=True)
 
-# स्क्रिप्ट मास्टर फेच करने का कैश्ड फंक्शन (ताकि बार-बार लोड न हो)
+# स्क्रिप्ट मास्टर फेच करने का कैश्ड फंक्शन
 @st.cache_data(ttl=600)
 def get_scrip_master(comm):
     url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
@@ -39,7 +39,6 @@ def get_scrip_master(comm):
 active_options, nearest_expiry = get_scrip_master(commodity)
 st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second")
 
-# बिना किसी बटन के हर सेकंड लाइव डेटा फेच और अपडेट होगा
 try:
     obj = SmartConnect(api_key=API_KEY)
     totp = pyotp.TOTP(TOTP_SECRET).now()
@@ -79,10 +78,13 @@ try:
                 
                 chain = pd.concat([ce_df, pe_df], axis=1).fillna(0).sort_index()
                 
-                total_ce = chain['CE_OI'].sum() if 'CE_OI' in chain.columns else 1
-                total_pe = chain['PE_OI'].sum() if 'PE_OI' in chain.columns else 0
+                total_ce = chain['CE_OI'].sum() if ('CE_OI' in chain.columns and not chain.empty) else 1
+                total_pe = chain['PE_OI'].sum() if ('PE_OI' in chain.columns and not chain.empty) else 0
                 pcr = round(total_pe / max(total_ce, 1), 2)
                 
                 if not chain.empty and 'CE_OI' in chain.columns and 'PE_OI' in chain.columns:
                     max_ce_strike = int(chain['CE_OI'].idxmax())
-                    max_pe_strike = int(
+                    max_pe_strike = int(chain['PE_OI'].idxmax())
+                else:
+                    max_ce_strike = 0
+                    max_pe_strike = 0
