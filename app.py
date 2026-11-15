@@ -64,12 +64,26 @@ if st.button("Update Data & Analyze"):
                 
                 if oi_list:
                     res_df = pd.DataFrame(oi_list)
-                    ce_df = res_df[res_df['Type'] == 'CE'].groupby('Strike').agg({'OI': 'sum', 'LTP': 'mean'})
-                    pe_df = res_df[res_df['Type'] == 'PE'].groupby('Strike').agg({'OI': 'sum', 'LTP': 'mean'})
+                    ce_df = res_df[res_df['Type'] == 'CE'].groupby('Strike').agg({'OI': 'CE_OI', 'LTP': 'CE_LTP'})
+                    pe_df = res_df[res_df['Type'] == 'PE'].groupby('Strike').agg({'OI': 'PE_OI', 'LTP': 'PE_LTP'})
                     
-                    chain = pd.DataFrame({
-                        "CE_OI": ce_df['OI'],
-                        "CE_LTP": ce_df['LTP'],
-                        "PE_LTP": pe_df['LTP'],
-                        "PE_OI": pe_df['OI']
-                    }).fillna(0).
+                    chain = pd.concat([ce_df, pe_df], axis=1).fillna(0).sort_index()
+                    
+                    total_ce = chain['CE_OI'].sum() if 'CE_OI' in chain.columns else 1
+                    total_pe = chain['PE_OI'].sum() if 'PE_OI' in chain.columns else 0
+                    pcr = round(total_pe / max(total_ce, 1), 2)
+                    
+                    if not chain.empty and 'CE_OI' in chain.columns and 'PE_OI' in chain.columns:
+                        max_ce_strike = int(chain['CE_OI'].idxmax())
+                        max_pe_strike = int(chain['PE_OI'].idxmax())
+                    else:
+                        max_ce_strike = 0
+                        max_pe_strike = 0
+                    
+                    st.markdown("### Market Dashboard")
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Support Strike", str(max_pe_strike))
+                    c2.metric("Resistance Strike", str(max_ce_strike))
+                    c3.metric("PCR Ratio", str(pcr))
+                    
+                    market_view = "BULLISH" if pcr > 1.15 else ("BEARISH" if
