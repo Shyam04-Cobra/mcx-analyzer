@@ -2,16 +2,17 @@ import streamlit as st
 import pandas as pd
 import requests
 import pyotp
+from datetime import datetime, timedelta
 from SmartApi import SmartConnect
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="MCX Live Chart & OI Overlay", layout="wide")
-st.title("📈 MCX Live Chart & Key Levels Overlay")
+st.title("📈 MCX Live Price & OI Analyzer")
 
-st_autorefresh(interval=1000, key="chart_refresh")
+st_autorefresh(interval=5000, key="chart_refresh")
 
 if "API_KEY" not in st.secrets:
-    st.error("API_KEY missing")
+    st.error("API_KEY missing in Streamlit Secrets")
     st.stop()
 
 API_KEY = st.secrets["API_KEY"]
@@ -27,18 +28,35 @@ def get_master(comm):
         url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
         res = requests.get(url, timeout=10)
         df = pd.DataFrame(res.json())
+        inst = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'FUTCOM')]
+        cdf = inst[inst['name'] == comm].copy()
+        cdf['expiry_dt'] = pd.to_datetime(cdf['expiry'])
+        ne = cdf['expiry_dt'].min()
+        row = cdf[cdf['expiry_dt'] == ne].iloc[0]
+        return row['token'], row['symbol'], ne
+    except:
+        return None, None, None
+
+fut_token, fut_symbol, nearest_expiry = get_master(commodity)
+
+@st.cache_data(ttl=600)
+def get_opt_master(comm):
+    try:
+        url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+        res = requests.get(url, timeout=10)
+        df = pd.DataFrame(res.json())
         inst = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'OPTFUT')]
         cdf = inst[inst['name'] == comm].copy()
         cdf['expiry_dt'] = pd.to_datetime(cdf['expiry'])
         ne = cdf['expiry_dt'].min()
-        return cdf[cdf['expiry_dt'] == ne], ne
+        return cdf[cdf['expiry_dt'] == ne]
     except:
-        return None, None
+        return None
 
-active_options, nearest_expiry = get_master(commodity)
+active_options = get_opt_master(commodity)
 
-if active_options is None or active_options.empty:
-    st.warning("⚠️ डेटा लोड हो रहा है...")
+if not fut_token:
+    st.warning("⚠️ कमोडिटी मास्टर डेटा लोड हो रहा है...")
     st.stop()
 
 if 'smart_obj' not in st.session_state:
@@ -54,10 +72,14 @@ if 'smart_obj' not in st.session_state:
     except:
         st.session_state['logged'] = False
 
-def fetch_levels():
+def fetch_levels_and_chart():
     if not st.session_state.get('logged', False):
-        return 0, 0, 0
+        return 0, 0, 0, pd.DataFrame()
+    
     obj = st.session_state['smart_obj']
+    support, resistance, pcr = 0, 0, 0
+    df_chart = pd.DataFrame()
+
     try:
         tokens = active_options['token'].tolist()[:80]
         md = obj.getMarketData("FULL", {"MCX": tokens})
@@ -77,32 +99,44 @@ def fetch_levels():
                 rdf = pd.DataFrame(oi_list)
                 ce = rdf[rdf['Type'] == 'CE'].groupby('Strike')['OI'].sum()
                 pe = rdf[rdf['Type'] == 'PE'].groupby('Strike')['OI'].sum()
-                
-                m_ce = int(ce.idxmax()) if not ce.empty else 0
-                m_pe = int(pe.idxmax()) if not pe.empty else 0
+                support = int(pe.idxmax()) if not pe.empty else 0
+                resistance = int(ce.idxmax()) if not ce.empty else 0
                 pcr = round(pe.sum() / max(ce.sum(), 1), 2)
-                return m_pe, m_ce, pcr
-    except:
+
+        to_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        from_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M")
+        
+        hist_params = {
+            "exchange": "MCX",
+            "symboltoken": fut_token,
+            "interval": "FIVE_MINUTE",
+            "fromdate": from_date,
+            "todate": to_date
+        }
+        hist_data = obj.getCandleData(hist_params)
+        if hist_data and hist_data.get('status') and hist_data.get('data'):
+            raw_candles = hist_data['data']
+            df_chart = pd.DataFrame(raw_candles, columns=['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume'])
+            df_chart['Datetime'] = pd.to_datetime(df_chart['Datetime'])
+            df_chart.set_index('Datetime', inplace=True)
+            df_chart = df_chart[['Close']]
+    except Exception as e:
         pass
-    return 0, 0, 0
 
-support, resistance, pcr = fetch_levels()
+    return support, resistance, pcr, df_chart
 
-st.markdown(f"### 📊 {commodity} ({nearest_expiry.strftime('%d %b %Y')}) Key Levels")
+support, resistance, pcr, chart_df = fetch_levels_and_chart()
+
+st.markdown(f"### 📊 MCX {commodity} ({fut_symbol}) Key Levels")
 c1, c2, c3 = st.columns(3)
 c1.metric("🛡️ Support (Max PE)", str(support))
 c2.metric("🧱 Resistance (Max CE)", str(resistance))
 c3.metric("📈 PCR Ratio", str(pcr))
 
 st.markdown("---")
+st.subheader(f"📉 MCX {commodity} Live Price Trend (INR)")
 
-# यहाँ 100% काम करने वाले यूनिवर्सल स्पॉट सिंबल का उपयोग किया गया है
-if commodity == "GOLDM":
-    tv_url = "https://s.tradingview.com/widgetembed/?symbol=OANDA%3AXAUUSD&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in"
+if not chart_df.empty:
+    st.line_chart(chart_df, height=450)
 else:
-    tv_url = "https://s.tradingview.com/widgetembed/?symbol=OANDA%3AXAGUSD&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&locale=in"
-
-chart_html = f"""
-<iframe src="{tv_url}" width="100%" height="550" frameborder="0" allowtransparency="true" scrolling="no"></iframe>
-"""
-st.components.v1.html(chart_html, height=570)
+    st.info("🔄 Angel One से MCX लाइव चार्ट डेटा लोड हो रहा है...")
