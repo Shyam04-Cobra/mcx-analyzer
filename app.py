@@ -6,7 +6,7 @@ from SmartApi import SmartConnect
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="MCX Analyzer", layout="wide")
-st.title("⚡ MCX Real-Time Analyzer")
+st.title("⚡ MCX Analyzer")
 
 st_autorefresh(interval=1000, key="refresh")
 
@@ -41,7 +41,7 @@ if active_options is None or active_options.empty:
     st.warning("⚠️ डेटा लोड हो रहा है...")
     st.stop()
 
-st.caption("Live Market Analyzer")
+st.caption("Live")
 
 if 'smart_obj' not in st.session_state:
     try:
@@ -57,7 +57,7 @@ if 'smart_obj' not in st.session_state:
         st.session_state['logged'] = False
 
 if not st.session_state.get('logged', False):
-    st.info("ℹ️ मार्केट बंद है या लॉगिन प्रतीक्षारत है।")
+    st.info("ℹ️ मार्केट बंद है।")
 else:
     obj = st.session_state['smart_obj']
     try:
@@ -95,10 +95,9 @@ else:
                 
                 bias = "BULLISH" if pcr > 1.15 else ("BEARISH" if pcr < 0.85 else "SIDEWAYS")
                 
-                st.markdown("### 📊 Dashboard")
+                st.markdown("### Dashboard")
                 st.write(f"Support: {m_pe} | Resistance: {m_ce} | PCR: {pcr} | Bias: {bias}")
-                
-                st.dataframe(chain, usest.dataframe(chain, use_container_width=True)
+                st.dataframe(chain)
             else:
                 st.info("ℹ️ डेटा उपलब्ध नहीं है।")
         else:
