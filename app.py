@@ -8,10 +8,8 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="MCX 1-Sec Live Analyzer", layout="wide")
 st.title("⚡ MCX Real-Time 1-Second Option Analyzer")
 
-# हर 1 सेकंड (1000 मिलीसेकंड) में ऑटो-रिफ्रेश
 st_autorefresh(interval=1000, key="mcx_1sec_refresh")
 
-# क्रेडेंशियल्स की जांच
 if "API_KEY" not in st.secrets:
     st.error("कृपया Streamlit Secrets में API_KEY सेट करें।")
     st.stop()
@@ -23,7 +21,6 @@ TOTP_SECRET = st.secrets["TOTP_SECRET"]
 
 commodity = st.radio("Select Commodity:", ["GOLDM", "SILVERM"], horizontal=True)
 
-# स्क्रिप्ट मास्टर फेच करने का कैश्ड फंक्शन
 @st.cache_data(ttl=600)
 def get_scrip_master(comm):
     try:
@@ -48,7 +45,6 @@ if active_options is None or active_options.empty:
 
 st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second")
 
-# सेशन स्टेट के जरिए लॉगिन को सुरक्षित रखना ताकि बार-बार रेट लिमिट न आए
 if 'smart_obj' not in st.session_state or 'logged_in' not in st.session_state:
     try:
         obj = SmartConnect(api_key=API_KEY)
@@ -75,14 +71,9 @@ else:
             oi_list = []
             
             for item in fetched:
-                sym = item['tradingSymbol']
-                token_val = item['symbolToken']
+                sym = item.get('tradingSymbol', '')
+                token_val = item.get('symbolToken', '')
                 strike_row = active_options[active_options['token'] == token_val]
                 if not strike_row.empty:
                     strike = float(strike_row['strike'].values[0]) / 100
-                    opt_type = "CE" if sym.endswith("CE") else "PE"
-                    ltp = item.get('ltp', 0)
-                    oi = item.get('opnInterest', 0)
-                    
-                    row_dict = {
-                        "Strike": int(strike),
+                    opt_type = "CE" if sym.endswith("CE") else
