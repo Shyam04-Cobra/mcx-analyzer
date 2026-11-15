@@ -5,12 +5,13 @@ import pyotp
 from datetime import datetime, timedelta
 from SmartApi import SmartConnect
 from streamlit_autorefresh import st_autorefresh
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="MCX Pro Option & Chart Analyzer", layout="wide")
-st.title("⚡ MCX Pro Option Chain & Live Chart Analyzer")
+st.set_page_config(page_title="MCX Ultra-Fast Live Candlestick Analyzer", layout="wide")
+st.title("⚡ MCX 1-Sec Live Candlestick & Multi-Timeframe Analyzer")
 
-# ऑटो-रिफ्रेश (हर 10 सेकंड में डेटा अपडेट होगा)
-st_autorefresh(interval=10000, key="pro_refresh")
+# ऑटो-रिफ्रेश (अब यह हर 1 सेकंड में रिफ्रेश होगा)
+st_autorefresh(interval=1000, key="ultra_fast_refresh")
 
 if "API_KEY" not in st.secrets:
     st.error("API_KEY missing in Streamlit Secrets")
@@ -21,19 +22,24 @@ CLIENT_ID = st.secrets["CLIENT_ID"]
 MPIN = st.secrets["MPIN"]
 TOTP_SECRET = st.secrets["TOTP_SECRET"]
 
-# साइडबार कंट्रोल्स
+# साइडबार कंट्रोल्स (1 मिनट से लेकर 1 दिन तक के सारे टाइमफ्रेम)
 commodity = st.sidebar.selectbox("Select Commodity:", ["GOLDM", "SILVERM", "COPPER", "CRUDEOIL"])
+
 timeframe_map = {
+    "1 Second (Tick-based)": "ONE_MINUTE",  # एंजेल वन API न्यूनतम ONE_MINUTE सपोर्ट करता है
     "1 Minute": "ONE_MINUTE",
     "3 Minute": "THREE_MINUTE",
     "5 Minute": "FIVE_MINUTE",
     "15 Minute": "FIFTEEN_MINUTE",
-    "30 Minute": "THIRTY_MINUTE"
+    "30 Minute": "THIRTY_MINUTE",
+    "1 Hour": "ONE_HOUR",
+    "1 Day": "ONE_DAY"
 }
-selected_tf_label = st.sidebar.selectbox("Select Timeframe:", list(timeframe_map.keys()), index=3)
+
+selected_tf_label = st.sidebar.selectbox("Select Timeframe:", list(timeframe_map.keys()), index=1)
 selected_tf = timeframe_map[selected_tf_label]
 
-# एंजेल वन मास्टर डेटा से टोकन और एक्सपायरी निकालना
+# मास्टर डेटा फेच करना
 @st.cache_data(ttl=600)
 def get_master(comm):
     try:
@@ -41,14 +47,12 @@ def get_master(comm):
         res = requests.get(url, timeout=10)
         df = pd.DataFrame(res.json())
         
-        # फ्यूचर्स टोकन
         inst_fut = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'FUTCOM')]
         cdf_fut = inst_fut[inst_fut['name'] == comm].copy()
         cdf_fut['expiry_dt'] = pd.to_datetime(cdf_fut['expiry'])
         ne = cdf_fut['expiry_dt'].min()
         row_fut = cdf_fut[cdf_fut['expiry_dt'] == ne].iloc[0]
         
-        # ऑप्शंस डेटा
         inst_opt = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'OPTFUT')]
         cdf_opt = inst_opt[inst_opt['name'] == comm].copy()
         cdf_opt['expiry_dt'] = pd.to_datetime(cdf_opt['expiry'])
@@ -78,7 +82,6 @@ if 'smart_obj' not in st.session_state:
     except:
         st.session_state['logged'] = False
 
-# डेटा फेच फंक्शन
 def fetch_market_data():
     if not st.session_state.get('logged', False):
         return 0, pd.DataFrame(), pd.DataFrame(), 0, 0, 50
@@ -90,9 +93,11 @@ def fetch_market_data():
     support, resistance, pcr = 0, 0, 0
 
     try:
-        # 1. फ्यूचर्स का करंट प्राइस और कैंडल डेटा
         to_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-        from_date = (datetime.now() - timedelta(days=5)).strftime("%Y-%m-%d %H:%M")
+        
+        # यदि 1 Day चुना है, तो पीछे का डेटा अधिक दिनों का होना चाहिए ताकि कैंडल सही दिखें
+        days_back = 30 if selected_tf == "ONE_DAY" else 5
+        from_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d %H:%M")
         
         hist_data = obj.getCandleData({
             "exchange": "MCX",
@@ -106,10 +111,9 @@ def fetch_market_data():
             raw = hist_data['data']
             df_chart = pd.DataFrame(raw, columns=['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume'])
             df_chart['Datetime'] = pd.to_datetime(df_chart['Datetime'])
-            df_chart.set_index('Datetime', inplace=True)
             spot_price = float(df_chart['Close'].iloc[-1])
 
-        # 2. ऑप्शन चेन और OI डेटा
+        # ऑप्शन चेन डेटा
         if not active_options.empty:
             tokens = active_options['token'].tolist()[:100]
             md = obj.getMarketData("FULL", {"MCX": tokens})
@@ -131,27 +135,12 @@ def fetch_market_data():
                     rdf = pd.DataFrame(records)
                     ce_df = rdf[rdf['Type'] == 'CE'].set_index('Strike')['OI']
                     pe_df = rdf[rdf['Type'] == 'PE'].set_index('Strike')['OI']
-                    
                     combined = pd.DataFrame({'Call OI': ce_df, 'Put OI': pe_df}).fillna(0).reset_index()
                     
                     if spot_price > 0:
-                        # ATM खोजना
-                        combined['Diff'] = abs(combined['Strike'] - spot_price)
-                        atm_strike = combined.loc[combined['Diff'].idxmin()]['Strike']
-                        
-                        # ITM / OTM तय करना
-                        def get_moneyness(row, opt_type):
-                            strike = row['Strike']
-                            if opt_type == 'CE':
-                                return 'ITM' if strike < spot_price else ('ATM' if strike == atm_strike else 'OTM')
-                            else:
-                                return 'ITM' if strike > spot_price else ('ATM' if strike == atm_strike else 'OTM')
-                        
-                        # सपोर्ट और रेजिस्टेंस निकालना
                         support = int(pe_df.idxmax()) if not pe_df.empty else 0
                         resistance = int(ce_df.idxmax()) if not ce_df.empty else 0
                         pcr = round(pe_df.sum() / max(ce_df.sum(), 1), 2)
-                        
                         oi_table = combined.sort_values(by='Strike')
     except Exception as e:
         pass
@@ -160,33 +149,49 @@ def fetch_market_data():
 
 spot_price, chart_df, oi_table, support, resistance, pcr = fetch_market_data()
 
-# डैशबोर्ड लेवल्स मेट्रिक्स
-st.markdown(f"### 🎯 MCX {commodity} ({fut_symbol}) Market Overview")
+# डैशबोर्ड लेवल्स
+st.markdown(f"### 🎯 MCX {commodity} ({fut_symbol}) Live Dashboard")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("💰 Current Spot/Fut Price", f"₹ {spot_price:,.2f}" if spot_price else "Loading...")
-col2.metric("🛡️ Support (Max PE OI)", f"₹ {support}" if support else "Calculating...")
-col3.metric("🧱 Resistance (Max CE OI)", f"₹ {resistance}" if resistance else "Calculating...")
+col1.metric("💰 Current Price", f"₹ {spot_price:,.2f}" if spot_price else "Loading...")
+col2.metric("🛡️ Support (Max PE)", f"₹ {support}" if support else "Calculating...")
+col3.metric("🧱 Resistance (Max CE)", f"₹ {resistance}" if resistance else "Calculating...")
 col4.metric("📊 PCR Ratio", str(pcr))
 
 st.markdown("---")
 
-# चार्ट सेक्शन
-st.subheader(f"📉 Price Chart ({selected_tf_label} Timeframe)")
+# प्लॉटली कैंडलस्टिक चार्ट (हर टाइमफ्रेम के लिए)
+st.subheader(f"🕯️ Live Candlestick Chart ({selected_tf_label})")
 if not chart_df.empty:
-    st.line_chart(chart_df[['Open', 'High', 'Low', 'Close']], height=400)
+    fig = go.Figure(data=[go.Candlestick(
+        x=chart_df['Datetime'],
+        open=chart_df['Open'],
+        high=chart_df['High'],
+        low=chart_df['Low'],
+        close=chart_df['Close'],
+        increasing_line_color='#26a69a', 
+        decreasing_line_color='#ef5350'
+    )])
+    
+    fig.update_layout(
+        xaxis_title='Time / Date',
+        yaxis_title='Price (INR)',
+        height=520,
+        margin=dict(l=10, r=10, t=10, b=10),
+        template='plotly_dark'
+    )
+    st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("🔄 चार्ट डेटा लोड हो रहा है...")
+    st.info("🔄 कैंडल डेटा लोड हो रहा है...")
 
 st.markdown("---")
 
-# ऑप्शन चेन और स्ट्राइक प्राइस (ATM/ITM/OTM) सेक्शन
+# ऑप्शन चेन और स्ट्राइक प्राइस टेबल
 st.subheader("📊 Option Chain OI & Strike Analysis (ATM / ITM / OTM)")
 if not oi_table.empty and spot_price > 0:
-    # टेबल फॉर्मेटिंग
     display_df = oi_table.copy()
     display_df['Call Moneyness'] = display_df['Strike'].apply(lambda x: 'ITM' if x < spot_price else ('ATM' if abs(x - spot_price) < 100 else 'OTM'))
     display_df['Put Moneyness'] = display_df['Strike'].apply(lambda x: 'ITM' if x > spot_price else ('ATM' if abs(x - spot_price) < 100 else 'OTM'))
     
     st.dataframe(display_df[['Strike', 'Call OI', 'Call Moneyness', 'Put OI', 'Put Moneyness']], use_container_width=True)
 else:
-    st.info("🔄 ऑप्शन चेन और स्ट्राइक डेटा लोड हो रहा है...")
+    st.info("🔄 ऑप्शन चेन डेटा लोड हो रहा है...")
