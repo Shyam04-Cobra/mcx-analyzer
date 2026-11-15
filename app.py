@@ -80,10 +80,10 @@ if st.button("Update Data & Analyze"):
                         max_ce_strike = 0
                         max_pe_strike = 0
                     
-                    st.markdown("### Market Dashboard")
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Support Strike", str(max_pe_strike))
-                    c2.metric("Resistance Strike", str(max_ce_strike))
-                    c3.metric("PCR Ratio", str(pcr))
-                    
-                    market_view = "BULLISH" if pcr > 1.15 else ("BEARISH" if
+                    # सुरक्षित और साफ़ मार्केट व्यू लॉजिक
+                    if pcr > 1.15:
+                        market_view = "BULLISH"
+                    elif pcr < 0.85:
+                        market_view = "BEARISH"
+                    else:
+                        market_view = "SIDEWAYS"
