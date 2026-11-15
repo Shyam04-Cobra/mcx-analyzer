@@ -6,7 +6,7 @@ from SmartApi import SmartConnect
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="MCX 1-Sec Live Analyzer", layout="wide")
-st.title("⚡ MCX Real-Time 1-Second Option Analyzer (Optimized)")
+st.title("⚡ MCX Real-Time 1-Second Option Analyzer")
 
 # हर 1 सेकंड (1000 मिलीसेकंड) में ऑटो-रिफ्रेश
 st_autorefresh(interval=1000, key="mcx_1sec_refresh")
@@ -46,9 +46,9 @@ if active_options is None or active_options.empty:
     st.warning("⚠️ स्क्रिप्ट मास्टर डेटा लोड करने में समस्या।")
     st.stop()
 
-st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second (Rate-Limit Protected)")
+st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second")
 
-# 🟢 सबसे महत्वपूर्ण सुधार: लॉगिन सिर्फ एक बार होगा (Session State का उपयोग)
+# सेशन स्टेट के जरिए लॉगिन को सुरक्षित रखना ताकि बार-बार रेट लिमिट न आए
 if 'smart_obj' not in st.session_state or 'logged_in' not in st.session_state:
     try:
         obj = SmartConnect(api_key=API_KEY)
@@ -84,4 +84,5 @@ else:
                     ltp = item.get('ltp', 0)
                     oi = item.get('opnInterest', 0)
                     
-                    oi_list.append({
+                    row_dict = {
+                        "Strike": int(strike),
