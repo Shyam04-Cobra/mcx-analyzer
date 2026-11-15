@@ -76,4 +76,20 @@ else:
                 strike_row = active_options[active_options['token'] == token_val]
                 if not strike_row.empty:
                     strike = float(strike_row['strike'].values[0]) / 100
-                    opt_type = "CE" if sym.endswith("CE") else
+                    
+                    if sym.endswith("CE"):
+                        opt_type = "CE"
+                    else:
+                        opt_type = "PE"
+                        
+                    ltp = item.get('ltp', 0)
+                    oi = item.get('opnInterest', 0)
+                    oi_list.append({"Strike": int(strike), "Type": opt_type, "OI": oi, "LTP": ltp})
+            
+            if oi_list:
+                res_df = pd.DataFrame(oi_list)
+                
+                ce_sub = res_df[res_df['Type'] == 'CE'].groupby('Strike')[['OI', 'LTP']].sum()
+                ce_df = ce_sub.rename(columns={'OI': 'CE_OI', 'LTP': 'CE_LTP'})
+                
+                pe_sub = res_
