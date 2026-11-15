@@ -72,5 +72,23 @@ else:
         
         if oi_list:
             res_df = pd.DataFrame(oi_list)
-            ce_df = res_df[res_df['Type'] == 'CE'].groupby('Strike').agg({'OI': 'CE_OI', 'LTP': 'CE_LTP'})
-            pe_df = res_df[res_df['Type'] == 'PE'].groupby('Strike').agg({'OI': 'PE_OI', 'LTP': 'PE
+            
+            # सुरक्षित और छोटी लाइनें ताकि कभी एरर न आए
+            ce_sub = res_df[res_df['Type'] == 'CE'].groupby('Strike')[['OI', 'LTP']].sum()
+            ce_df = ce_sub.rename(columns={'OI': 'CE_OI', 'LTP': 'CE_LTP'})
+            
+            pe_sub = res_df[res_df['Type'] == 'PE'].groupby('Strike')[['OI', 'LTP']].sum()
+            pe_df = pe_sub.rename(columns={'OI': 'PE_OI', 'LTP': 'PE_LTP'})
+            
+            chain = pd.concat([ce_df, pe_df], axis=1).fillna(0).sort_index()
+            
+            total_ce = chain['CE_OI'].sum() if ('CE_OI' in chain.columns and not chain.empty) else 1
+            total_pe = chain['PE_OI'].sum() if ('PE_OI' in chain.columns and not chain.empty) else 0
+            pcr = round(total_pe / max(total_ce, 1), 2)
+            
+            if not chain.empty and 'CE_OI' in chain.columns and 'PE_OI' in chain.columns:
+                max_ce_strike = int(chain['CE_OI'].idxmax())
+                max_pe_strike = int(chain['PE_OI'].idxmax())
+            else:
+                max_ce_strike = 0
+                max_pe_s
