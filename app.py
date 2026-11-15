@@ -5,9 +5,8 @@ import pyotp
 from SmartApi import SmartConnect
 
 st.set_page_config(page_title="MCX Live Analyzer", layout="wide")
-st.title("🚀 MCX Advanced Option & Volatility Analyzer")
+st.title("MCX Advanced Option Analyzer")
 
-# सीक्रेट्स लोड करें
 try:
     API_KEY = st.secrets["API_KEY"]
     CLIENT_ID = st.secrets["CLIENT_ID"]
@@ -26,7 +25,7 @@ if st.button("Update Data & Analyze"):
         login = obj.generateSession(CLIENT_ID, MPIN, totp)
         
         if not login['status']:
-            st.error("Angel One Login Failed! कृपया क्रेडेंशियल्स चेक करें।")
+            st.error("Angel One Login Failed!")
         else:
             url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
             data = requests.get(url).json()
@@ -38,7 +37,7 @@ if st.button("Update Data & Analyze"):
             nearest_expiry = comm_df['expiry_dt'].min()
             active_options = comm_df[comm_df['expiry_dt'] == nearest_expiry]
             
-            st.info(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')}")
+            st.info(f"Active Expiry: {nearest_expiry.strftime('%d %b %Y')}")
             tokens = active_options['token'].tolist()[:80]
             
             market_data = obj.getMarketData("FULL", {"MCX": tokens})
@@ -73,19 +72,4 @@ if st.button("Update Data & Analyze"):
                         "CE_LTP": ce_df['LTP'],
                         "PE_LTP": pe_df['LTP'],
                         "PE_OI": pe_df['OI']
-                    }).fillna(0).sort_index()
-                    
-                    total_ce = chain['CE_OI'].sum()
-                    total_pe = chain['PE_OI'].sum()
-                    pcr = round(total_pe / max(total_ce, 1), 2)
-                    
-                    if not chain.empty:
-                        max_ce_strike = int(chain['CE_OI'].idxmax())
-                        max_pe_strike = int(chain['PE_OI'].idxmax())
-                    else:
-                        max_ce_strike = 0
-                        max_pe_strike = 0
-                    
-                    st.markdown("### 📊 Market Dashboard & Metrics")
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("🛡️ Support (Max PE OI)",
+                    }).fillna(0).
