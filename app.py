@@ -45,7 +45,6 @@ if st.button("Update Data & Analyze"):
             if market_data['status']:
                 fetched = market_data['data']['fetched']
                 oi_list = []
-                underlying_price = 0
                 
                 for item in fetched:
                     sym = item['tradingSymbol']
@@ -76,10 +75,17 @@ if st.button("Update Data & Analyze"):
                         "PE_OI": pe_df['OI']
                     }).fillna(0).sort_index()
                     
-                    # अंडरलाइंग या एटीएम स्ट्राइक का अनुमान (जहाँ कुल OI एक्टिविटी सबसे ज्यादा है या औसत स्ट्राइक)
                     total_ce = chain['CE_OI'].sum()
                     total_pe = chain['PE_OI'].sum()
                     pcr = round(total_pe / max(total_ce, 1), 2)
                     
-                    max_ce_strike = chain['CE_OI'].idxmax() if not chain.empty else 0
-                    max_pe_strike = chain['PE_OI'].idxmax() if not chain.empty else 0
+                    if not chain.empty:
+                        max_ce_strike = chain['CE_OI'].idxmax()
+                        max_pe_strike = chain['PE_OI'].idxmax()
+                    else:
+                        max_ce_strike = 0
+                        max_pe_strike = 0
+                    
+                    st.markdown("### 📊 Market Dashboard & Metrics")
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("🛡️ Support (Max PE OI)", f"₹ {max
