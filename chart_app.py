@@ -96,11 +96,11 @@ c3.metric("📈 PCR Ratio", str(pcr))
 
 st.markdown("---")
 
-# यहाँ कमोडिटी के अनुसार सही ट्रेडिंगव्यू सिंबल सेट किया गया है
+# यहाँ ग्लोबल कमोडिटी फ्यूचर्स सिंबल सेट किया गया है जो कभी एरर नहीं देगा
 if commodity == "GOLDM":
-    tv_symbol = "MCX:GOLDM1!"
+    tv_symbol = "COMEX:GC1!"
 else:
-    tv_symbol = "MCX:SILVERM1!"
+    tv_symbol = "COMEX:SI1!"
 
 chart_html = f"""
 <div class="tradingview-widget-container">
