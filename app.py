@@ -37,7 +37,7 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
                 nearest_expiry = comm_df['expiry_dt'].min()
                 active_options = comm_df[comm_df['expiry_dt'] == nearest_expiry]
                 
-                st.caption(f"सक्रिय एक्सपायरी: **{nearest_expiry.strftime('%d %b %Y')}**")
+                st.caption(f"सक्रिय एक्सपायरी: {nearest_expiry.strftime('%d %b %Y')}")
                 
                 tokens = active_options['token'].tolist()[:50]
                 market_data = obj.getMarketData("FULL", {"MCX": tokens})
@@ -80,4 +80,4 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
                     
                     st.markdown("---")
                     if pcr > 1.2:
-                        st.success("🟢 **मजबूत बुलिश (Strong Bullish):** पुट राइटिंग ज्यादा ह�
+                        st.success("🟢 मजबूत बुलिश: पुट राइटिंग ज्यादा है। ऊपर की त
