@@ -58,7 +58,7 @@ if st.button("लाइव ऑप्शन डेटा अपडेट कर�
                     
                     res_df = pd.DataFrame(oi_list)
                     ce_df = res_df[res_df['Type'] == 'CE'].set_index('Strike')
-                    pe_df = res_df[res_df['Type'] == 'Ref'].set_index('Strike') if 'Ref' in res_df['Type'].values else res_df[res_df['Type'] == 'PE'].set_index('Strike')
+                    pe_df = res_df[res_df['Type'] == 'PE'].set_index('Strike')
                     
                     chain = pd.DataFrame({
                         "CE_OI": ce_df['OI'],
@@ -80,8 +80,11 @@ if st.button("लाइव ऑप्शन डेटा अपडेट कर�
                     
                     st.markdown("---")
                     if pcr > 1.2:
-                        st.success("Strong Bullish (Put writing is high)")
+                        st.success("Strong Bullish")
                     elif pcr < 0.8:
-                        st.error("Strong Bearish (Call writers dominating)")
+                        st.error("Strong Bearish")
                     else:
-                        st.w
+                        st.warning("Sideways Market")
+                        
+                    st.dataframe(chain, use_container_width=True)
+        except Excepti
