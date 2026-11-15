@@ -5,7 +5,7 @@ import pyotp
 from SmartApi import SmartConnect
 
 st.set_page_config(page_title="MCX Live Analyzer", page_icon="🪙", layout="centered")
-st.title("🪙 MCX Gold & Silver Mini Analyzer")
+st.title("MCX Gold & Silver Mini Analyzer")
 
 API_KEY = st.secrets["API_KEY"]
 CLIENT_ID = st.secrets["CLIENT_ID"]
@@ -21,7 +21,7 @@ def get_mcx_instruments():
     df = pd.DataFrame(data)
     return df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'OPTFUT')]
 
-if st.button("🔄 लाइव ऑप्शन डेटा अपडेट करें", use_container_width=True):
+if st.button("लाइव ऑप्शन डेटा अपडेट करें", use_container_width=True):
     with st.spinner("Angel One से डेटा आ रहा है..."):
         try:
             obj = SmartConnect(api_key=API_KEY)
@@ -29,7 +29,7 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
             login = obj.generateSession(CLIENT_ID, MPIN, totp)
             
             if not login['status']:
-                st.error("लॉगिन विफल! अपनी डिटेल्स जांचें।")
+                st.error("लॉगिन विफल!")
             else:
                 inst_df = get_mcx_instruments()
                 comm_df = inst_df[inst_df['name'] == commodity].copy()
@@ -37,7 +37,7 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
                 nearest_expiry = comm_df['expiry_dt'].min()
                 active_options = comm_df[comm_df['expiry_dt'] == nearest_expiry]
                 
-                st.caption(f"सक्रिय एक्सपायरी: {nearest_expiry.strftime('%d %b %Y')}")
+                st.caption(f"Expiry: {nearest_expiry.strftime('%d %b %Y')}")
                 
                 tokens = active_options['token'].tolist()[:50]
                 market_data = obj.getMarketData("FULL", {"MCX": tokens})
@@ -58,7 +58,7 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
                     
                     res_df = pd.DataFrame(oi_list)
                     ce_df = res_df[res_df['Type'] == 'CE'].set_index('Strike')
-                    pe_df = res_df[res_df['Type'] == 'PE'].set_index('Strike')
+                    pe_df = res_df[res_df['Type'] == 'Ref'].set_index('Strike') if 'Ref' in res_df['Type'].values else res_df[res_df['Type'] == 'PE'].set_index('Strike')
                     
                     chain = pd.DataFrame({
                         "CE_OI": ce_df['OI'],
@@ -74,10 +74,14 @@ if st.button("🔄 लाइव ऑप्शन डेटा अपडेट क
                     pcr = round(total_pe / max(total_ce, 1), 2)
                     
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("📉 लोअर रेंज (Support)", f"₹ {max_pe_strike:,}")
-                    c2.metric("📈 अपर रेंज (Resistance)", f"₹ {max_ce_strike:,}")
-                    c3.metric("⚖️ PCR रेशियो", pcr)
+                    c1.metric("Support Level", f"₹ {max_pe_strike:,}")
+                    c2.metric("Resistance Level", f"₹ {max_ce_strike:,}")
+                    c3.metric("PCR Ratio", pcr)
                     
                     st.markdown("---")
                     if pcr > 1.2:
-                        st.success("🟢 मजबूत बुलिश: पुट राइटिंग ज्यादा है। ऊपर की त
+                        st.success("Strong Bullish (Put writing is high)")
+                    elif pcr < 0.8:
+                        st.error("Strong Bearish (Call writers dominating)")
+                    else:
+                        st.w
