@@ -6,7 +6,7 @@ from SmartApi import SmartConnect
 from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="MCX 1-Sec Live Analyzer", layout="wide")
-st.title("⚡ MCX Real-Time 1-Second Option Analyzer")
+st.title("⚡ MCX Real-Time 1-Second Option Analyzer (Optimized)")
 
 # हर 1 सेकंड (1000 मिलीसेकंड) में ऑटो-रिफ्रेश
 st_autorefresh(interval=1000, key="mcx_1sec_refresh")
@@ -26,69 +26,62 @@ commodity = st.radio("Select Commodity:", ["GOLDM", "SILVERM"], horizontal=True)
 # स्क्रिप्ट मास्टर फेच करने का कैश्ड फंक्शन
 @st.cache_data(ttl=600)
 def get_scrip_master(comm):
-    url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
-    data = requests.get(url).json()
-    df = pd.DataFrame(data)
-    inst_df = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'OPTFUT')]
-    comm_df = inst_df[inst_df['name'] == comm].copy()
-    comm_df['expiry_dt'] = pd.to_datetime(comm_df['expiry'])
-    nearest_expiry = comm_df['expiry_dt'].min()
-    active_options = comm_df[comm_df['expiry_dt'] == nearest_expiry]
-    return active_options, nearest_expiry
+    try:
+        url = "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        df = pd.DataFrame(data)
+        inst_df = df[(df['exch_seg'] == 'MCX') & (df['instrumenttype'] == 'OPTFUT')]
+        comm_df = inst_df[inst_df['name'] == comm].copy()
+        comm_df['expiry_dt'] = pd.to_datetime(comm_df['expiry'])
+        nearest_expiry = comm_df['expiry_dt'].min()
+        active_options = comm_df[comm_df['expiry_dt'] == nearest_expiry]
+        return active_options, nearest_expiry
+    except Exception as e:
+        return None, None
 
 active_options, nearest_expiry = get_scrip_master(commodity)
-st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second")
 
-obj = SmartConnect(api_key=API_KEY)
-totp = pyotp.TOTP(TOTP_SECRET).now()
-login = obj.generateSession(CLIENT_ID, MPIN, totp)
+if active_options is None or active_options.empty:
+    st.warning("⚠️ स्क्रिप्ट मास्टर डेटा लोड करने में समस्या।")
+    st.stop()
 
-if not login['status']:
-    st.error("Angel One Login Failed! कृपया क्रेडेंशियल्स चेक करें।")
+st.caption(f"📅 Active Expiry: {nearest_expiry.strftime('%d %b %Y')} | ⚡ Live Refresh: Every 1 Second (Rate-Limit Protected)")
+
+# 🟢 सबसे महत्वपूर्ण सुधार: लॉगिन सिर्फ एक बार होगा (Session State का उपयोग)
+if 'smart_obj' not in st.session_state or 'logged_in' not in st.session_state:
+    try:
+        obj = SmartConnect(api_key=API_KEY)
+        totp = pyotp.TOTP(TOTP_SECRET).now()
+        login = obj.generateSession(CLIENT_ID, MPIN, totp)
+        if login and login.get('status'):
+            st.session_state['smart_obj'] = obj
+            st.session_state['logged_in'] = True
+        else:
+            st.session_state['logged_in'] = False
+    except Exception as e:
+        st.session_state['logged_in'] = False
+
+if not st.session_state.get('logged_in', False):
+    st.info("ℹ️ आज वीकेंड (रविवार) है या मार्केट बंद है, इसलिए लॉगिन सेशन स्थापित नहीं हो पा रहा है। सोमवार को मार्केट खुलते ही यह स्वतः काम करने लगेगा।")
 else:
-    tokens = active_options['token'].tolist()[:80]
-    market_data = obj.getMarketData("FULL", {"MCX": tokens})
-    
-    if market_data['status']:
-        fetched = market_data['data']['fetched']
-        oi_list = []
+    obj = st.session_state['smart_obj']
+    try:
+        tokens = active_options['token'].tolist()[:80]
+        market_data = obj.getMarketData("FULL", {"MCX": tokens})
         
-        for item in fetched:
-            sym = item['tradingSymbol']
-            token_val = item['symbolToken']
-            strike_row = active_options[active_options['token'] == token_val]
-            if not strike_row.empty:
-                strike = float(strike_row['strike'].values[0]) / 100
-                opt_type = "CE" if sym.endswith("CE") else "PE"
-                ltp = item.get('ltp', 0)
-                oi = item.get('opnInterest', 0)
-                
-                oi_list.append({
-                    "Strike": int(strike),
-                    "Type": opt_type,
-                    "OI": oi,
-                    "LTP": ltp
-                })
-        
-        if oi_list:
-            res_df = pd.DataFrame(oi_list)
+        if market_data and market_data.get('status'):
+            fetched = market_data['data']['fetched']
+            oi_list = []
             
-            # सुरक्षित और छोटी लाइनें ताकि कभी एरर न आए
-            ce_sub = res_df[res_df['Type'] == 'CE'].groupby('Strike')[['OI', 'LTP']].sum()
-            ce_df = ce_sub.rename(columns={'OI': 'CE_OI', 'LTP': 'CE_LTP'})
-            
-            pe_sub = res_df[res_df['Type'] == 'PE'].groupby('Strike')[['OI', 'LTP']].sum()
-            pe_df = pe_sub.rename(columns={'OI': 'PE_OI', 'LTP': 'PE_LTP'})
-            
-            chain = pd.concat([ce_df, pe_df], axis=1).fillna(0).sort_index()
-            
-            total_ce = chain['CE_OI'].sum() if ('CE_OI' in chain.columns and not chain.empty) else 1
-            total_pe = chain['PE_OI'].sum() if ('PE_OI' in chain.columns and not chain.empty) else 0
-            pcr = round(total_pe / max(total_ce, 1), 2)
-            
-            if not chain.empty and 'CE_OI' in chain.columns and 'PE_OI' in chain.columns:
-                max_ce_strike = int(chain['CE_OI'].idxmax())
-                max_pe_strike = int(chain['PE_OI'].idxmax())
-            else:
-                max_ce_strike = 0
-                max_pe_s
+            for item in fetched:
+                sym = item['tradingSymbol']
+                token_val = item['symbolToken']
+                strike_row = active_options[active_options['token'] == token_val]
+                if not strike_row.empty:
+                    strike = float(strike_row['strike'].values[0]) / 100
+                    opt_type = "CE" if sym.endswith("CE") else "PE"
+                    ltp = item.get('ltp', 0)
+                    oi = item.get('opnInterest', 0)
+                    
+                    oi_list.append({
