@@ -80,12 +80,12 @@ if st.button("Update Data & Analyze"):
                     pcr = round(total_pe / max(total_ce, 1), 2)
                     
                     if not chain.empty:
-                        max_ce_strike = chain['CE_OI'].idxmax()
-                        max_pe_strike = chain['PE_OI'].idxmax()
+                        max_ce_strike = int(chain['CE_OI'].idxmax())
+                        max_pe_strike = int(chain['PE_OI'].idxmax())
                     else:
                         max_ce_strike = 0
                         max_pe_strike = 0
                     
                     st.markdown("### 📊 Market Dashboard & Metrics")
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("🛡️ Support (Max PE OI)", f"₹ {max
+                    c1.metric("🛡️ Support (Max PE OI)",
