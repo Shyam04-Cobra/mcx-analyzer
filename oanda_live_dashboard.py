@@ -20,7 +20,7 @@ ticker_symbol = "GC=F" if "Gold" in commodity_choice else "SI=F"
 def get_oanda_live_data(ticker):
     try:
         data = yf.Ticker(ticker)
-        # आज का लाइव इंट्राडे डेटा (1 मिनट या 1-टिक अंतराल पर)
+        # आज का लाइव इंट्राडे डेटा (1 मिनट अंतराल पर)
         hist = data.history(period="1d", interval="1m")
         if not hist.empty:
             current_price = float(hist['Close'].iloc[-1])
